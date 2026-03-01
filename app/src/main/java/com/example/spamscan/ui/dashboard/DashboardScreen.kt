@@ -44,7 +44,8 @@ import android.Manifest
 fun DashboardScreen(
     preferences: AppPreferences,
     onNavigateToSettings: () -> Unit,
-    onNavigateToDetail: (Long) -> Unit
+    onNavigateToDetail: (Long) -> Unit,
+    onNavigateToCallDetail: (Long) -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -55,8 +56,10 @@ fun DashboardScreen(
     // Observe Room database Flow for instant refresh
     val db = remember { AppDatabase.getDatabase(context) }
     val cachedMessages by db.smsDao().getAllCachedSms().collectAsState(initial = emptyList())
+    val cachedCalls by db.callDao().getAllCachedCalls().collectAsState(initial = emptyList())
 
     var selectedFilter by remember { mutableStateOf("ALL") }
+    var showCallsView by remember { mutableStateOf(false) }
 
     // Map CachedSms to SmsItem and Filter
     val messages = remember(cachedMessages, selectedFilter) {
@@ -69,6 +72,16 @@ fun DashboardScreen(
                     else -> true
                 }
             }
+    }
+
+    val calls = remember(cachedCalls, selectedFilter) {
+        cachedCalls.filter {
+            when(selectedFilter) {
+                "SPAM" -> it.isSpam
+                "SAFE" -> !it.isSpam
+                else -> true
+            }
+        }
     }
 
     var isScanning by remember { mutableStateOf(false) }
@@ -147,16 +160,36 @@ fun DashboardScreen(
                         )
                     }
                 
-                    IconButton(
-                        onClick = onNavigateToSettings,
-                        modifier = Modifier.background(Color(0xFFF1F3F4), CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "Settings",
-                            tint = Color.Black,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = { showCallsView = !showCallsView },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(if (showCallsView) Color.Black else Color(0xFFF1F3F4), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = if (showCallsView) Icons.Filled.Call else Icons.Filled.Sms,
+                                contentDescription = "Toggle History",
+                                tint = if (showCallsView) Color.White else Color.Black,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        IconButton(
+                            onClick = onNavigateToSettings,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(Color(0xFFF1F3F4), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "Settings",
+                                tint = Color.Black,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 1.dp)
@@ -181,10 +214,16 @@ fun DashboardScreen(
                 item {
                     PermissionRequestItem(onGrantClick = { permissionLauncher.launch(Manifest.permission.READ_SMS) })
                 }
-            } else if (messages.isEmpty() && !isScanning) {
+            } else if (!showCallsView && messages.isEmpty() && !isScanning) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                         Text("No messages found.", color = Color.LightGray, fontSize = 16.sp)
+                    }
+                }
+            } else if (showCallsView && calls.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        Text("No calls found.", color = Color.LightGray, fontSize = 16.sp)
                     }
                 }
             } else {
@@ -192,7 +231,7 @@ fun DashboardScreen(
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Inbox Analysis",
+                                text = if (showCallsView) "Call Analysis" else "Inbox Analysis",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.Black
@@ -261,14 +300,25 @@ fun DashboardScreen(
                         }
                     }
                 }
-                items(messages, key = { it.id }) { msg ->
-                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        MessageCard(
-                            msg = msg, 
-                            threshold = spamThreshold, 
-                            useCustomModel = useCustomModel,
-                            onClick = { onNavigateToDetail(msg.id) }
-                        )
+                if (showCallsView) {
+                    items(calls, key = { it.id }) { call ->
+                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                            CallCard(
+                                call = call,
+                                onClick = { onNavigateToCallDetail(call.id) }
+                            )
+                        }
+                    }
+                } else {
+                    items(messages, key = { it.id }) { msg ->
+                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                            MessageCard(
+                                msg = msg, 
+                                threshold = spamThreshold, 
+                                useCustomModel = useCustomModel,
+                                onClick = { onNavigateToDetail(msg.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -493,6 +543,70 @@ fun MessageCard(msg: SmsItem, threshold: Float, useCustomModel: Boolean, onClick
                         fontSize = 9.sp
                     )
                 }
+            }
+        }
+    }
+}
+@Composable
+fun CallCard(call: com.example.spamscan.data.local.CachedCall, onClick: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(Color(0xFFF8F9FA), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (call.isSpam) Icons.Filled.Close else Icons.Filled.Check, 
+                    contentDescription = null, 
+                    tint = if (call.isSpam) Color(0xFFE53935) else Color(0xFF43A047), 
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = call.sender,
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = DateUtils.getRelativeTimeSpanString(call.timestamp).toString(),
+                        color = Color.LightGray,
+                        fontSize = 11.sp
+                    )
+                }
+
+                Text(
+                    text = if (call.isSpam) "SPAM CALL DETECTED" else "SAFE CALL",
+                    color = if (call.isSpam) Color(0xFFE53935) else Color(0xFF43A047),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
     }

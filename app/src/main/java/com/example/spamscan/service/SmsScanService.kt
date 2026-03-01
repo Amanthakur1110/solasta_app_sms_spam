@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -11,29 +12,32 @@ import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
 import android.provider.Telephony
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.runtime.*
 import androidx.compose.ui.platform.ComposeView
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.core.app.NotificationCompat
 import androidx.lifecycle.*
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.spamscan.MainActivity
 import com.example.spamscan.R
+import com.example.spamscan.data.AppPreferences
+import com.example.spamscan.data.local.AppDatabase
+import com.example.spamscan.data.local.BlockedSender
+import com.example.spamscan.ml.SmsInboxScanner
+import com.example.spamscan.receiver.CallReceiver
 import com.example.spamscan.receiver.SmsReceiver
+import com.example.spamscan.ui.components.OverlayType
 import com.example.spamscan.ui.components.SpamAlertOverlay
 import com.example.spamscan.ui.theme.SpamscanTheme
+import kotlinx.coroutines.*
 
 class SmsScanService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -72,7 +76,13 @@ class SmsScanService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
             val sender = intent.getStringExtra(SmsReceiver.EXTRA_SENDER) ?: "Unknown"
             val body = intent.getStringExtra(SmsReceiver.EXTRA_BODY) ?: ""
             val prob = intent.getFloatExtra(SmsReceiver.EXTRA_PROBABILITY, 0f)
-            showGlobalOverlay(sender, body, prob)
+            showGlobalOverlay(sender, body, prob, OverlayType.SMS)
+        } else if (intent?.action == CallReceiver.ACTION_SHOW_CALL_OVERLAY) {
+            val number = intent.getStringExtra(CallReceiver.EXTRA_CALL_NUMBER) ?: "Unknown"
+            showGlobalOverlay(number, "", 0f, OverlayType.CALL)
+        } else if (intent?.action == CallReceiver.ACTION_SHOW_POST_CALL_REPORT) {
+            val number = intent.getStringExtra(CallReceiver.EXTRA_CALL_NUMBER) ?: "Unknown"
+            showGlobalOverlay(number, "", 0f, OverlayType.POST_CALL)
         }
 
         return START_STICKY
@@ -85,7 +95,12 @@ class SmsScanService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
         _viewModelStore.clear()
     }
 
-    private fun showGlobalOverlay(sender: String, body: String, probability: Float) {
+    private fun showGlobalOverlay(
+        sender: String, 
+        body: String, 
+        probability: Float, 
+        type: OverlayType = OverlayType.SMS
+    ) {
         removeOverlay() 
 
         val hostView = ComposeView(this).apply {
@@ -100,12 +115,19 @@ class SmsScanService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
                         sender = sender,
                         body = body,
                         probability = probability,
+                        type = type,
                         isVisible = isVisible,
                         onDismiss = { 
                             isVisible = false
                             Handler(Looper.getMainLooper()).postDelayed({
                                 removeOverlay()
                             }, 1000)
+                        },
+                        onBlock = { number ->
+                            CoroutineScope(Dispatchers.IO).launch {
+                                val db = AppDatabase.getDatabase(this@SmsScanService)
+                                db.blockedSenderDao().blockSender(BlockedSender(number))
+                            }
                         }
                     )
                 }

@@ -71,7 +71,9 @@ class MainActivity : ComponentActivity() {
         val permissions = mutableListOf(
             Manifest.permission.RECEIVE_SMS,
             Manifest.permission.READ_SMS,
-            Manifest.permission.READ_CONTACTS
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.READ_CALL_LOG
         )
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

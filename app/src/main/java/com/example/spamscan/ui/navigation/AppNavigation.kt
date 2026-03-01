@@ -9,10 +9,14 @@ import com.example.spamscan.ui.dashboard.DashboardScreen
 import com.example.spamscan.ui.settings.SettingsScreen
 
 sealed class AppScreen(val route: String) {
+    object Splash : AppScreen("splash")
     object Dashboard : AppScreen("dashboard")
     object Settings : AppScreen("settings")
     object MessageDetail : AppScreen("detail/{smsId}") {
         fun createRoute(smsId: Long) = "detail/$smsId"
+    }
+    object CallDetail : AppScreen("call_detail/{callId}") {
+        fun createRoute(callId: Long) = "call_detail/$callId"
     }
 }
 
@@ -22,14 +26,26 @@ fun AppNavigation(preferences: AppPreferences) {
 
     NavHost(
         navController = navController,
-        startDestination = AppScreen.Dashboard.route
+        startDestination = AppScreen.Splash.route
     ) {
+        composable(AppScreen.Splash.route) {
+            com.example.spamscan.ui.splash.SplashScreen(
+                onTimeout = { 
+                    navController.navigate(AppScreen.Dashboard.route) {
+                        popUpTo(AppScreen.Splash.route) { inclusive = true }
+                    }
+                }
+            )
+        }
         composable(AppScreen.Dashboard.route) {
             DashboardScreen(
                 preferences = preferences,
                 onNavigateToSettings = { navController.navigate(AppScreen.Settings.route) },
                 onNavigateToDetail = { smsId -> 
                     navController.navigate(AppScreen.MessageDetail.createRoute(smsId))
+                },
+                onNavigateToCallDetail = { callId ->
+                    navController.navigate(AppScreen.CallDetail.createRoute(callId))
                 }
             )
         }
@@ -46,6 +62,16 @@ fun AppNavigation(preferences: AppPreferences) {
             val smsId = backStackEntry.arguments?.getLong("smsId") ?: 0L
             com.example.spamscan.ui.details.MessageDetailScreen(
                 smsId = smsId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = AppScreen.CallDetail.route,
+            arguments = listOf(androidx.navigation.navArgument("callId") { type = androidx.navigation.NavType.LongType })
+        ) { backStackEntry ->
+            val callId = backStackEntry.arguments?.getLong("callId") ?: 0L
+            com.example.spamscan.ui.details.CallDetailScreen(
+                callId = callId,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
