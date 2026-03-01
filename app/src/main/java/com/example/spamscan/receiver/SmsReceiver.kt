@@ -8,6 +8,11 @@ import android.util.Log
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.spamscan.data.AppPreferences
 import com.example.spamscan.ml.SpamDetector
+import com.example.spamscan.data.local.AppDatabase
+import com.example.spamscan.data.local.CachedSms
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class SmsReceiver : BroadcastReceiver() {
     companion object {
@@ -23,6 +28,7 @@ class SmsReceiver : BroadcastReceiver() {
             val preferences = AppPreferences(context)
             val currentThreshold = preferences.spamThreshold.value
             val useCustomModel = preferences.useCustomModel.value
+            val db = AppDatabase.getDatabase(context)
             
             for (message in messages) {
                 val sender = message.originatingAddress ?: "Unknown"
@@ -31,6 +37,20 @@ class SmsReceiver : BroadcastReceiver() {
                 // Run inference
                 val result = SpamDetector.classify(context, body, currentThreshold, useCustomModel)
                 Log.d("SmsReceiver", "Received SMS from $sender - Spam Prob: ${result.probability}")
+
+                // Persist to database to trigger real-time refresh in Dashboard
+                CoroutineScope(Dispatchers.IO).launch {
+                    val timestamp = System.currentTimeMillis()
+                    val cachedSms = CachedSms(
+                        id = timestamp + body.hashCode(), // Simple unique ID
+                        sender = sender,
+                        body = body,
+                        timestamp = timestamp,
+                        spamProbability = result.probability,
+                        isSpam = result.isSpam
+                    )
+                    db.smsDao().insertSms(cachedSms)
+                }
 
                 if (result.isSpam) {
                     val overlayIntent = Intent(ACTION_SPAM_DETECTED).apply {
