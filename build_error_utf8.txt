@@ -1,0 +1,113 @@
+﻿> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+
+> Task :app:compileDebugKotlin FAILED
+.\gradlew : e: file:///C:/Users/s6323/AndroidStudioPr
+ojects/spamscan/app/src/main/java/com/example/spamsca
+n/ui/components/SpamAlertOverlay.kt:44:66 Unresolved 
+reference 'FastOutSlowInEasing'.
+At line:1 char:1
++ .\gradlew :app:compileDebugKotlin --console=plain 
+> build_error.txt 2 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (e: file 
+   :///C:/U...tSlowInEasing'.:String) [], RemoteExc  
+  eption
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+e: file:///C:/Users/s6323/AndroidStudioProjects/spams
+can/app/src/main/java/com/example/spamscan/ui/compone
+nts/SpamAlertOverlay.kt:48:66 Unresolved reference 
+'FastOutSlowInEasing'.
+e: file:///C:/Users/s6323/AndroidStudioProjects/spams
+can/app/src/main/java/com/example/spamscan/ui/compone
+nts/SpamAlertOverlay.kt:61:18 Unresolved reference 
+'border'.
+e: file:///C:/Users/s6323/AndroidStudioProjects/spams
+can/app/src/main/java/com/example/spamscan/ui/compone
+nts/SpamAlertOverlay.kt:74:56 Unresolved reference 
+'CircleShape'.
+e: file:///C:/Users/s6323/AndroidStudioProjects/spams
+can/app/src/main/java/com/example/spamscan/ui/compone
+nts/SpamAlertOverlay.kt:78:52 Unresolved reference 
+'Block'.
+e: file:///C:/Users/s6323/AndroidStudioProjects/spams
+can/app/src/main/java/com/example/spamscan/ui/dashboa
+rd/DashboardScreen.kt:106:48 None of the following 
+candidates is applicable:
+fun Modifier.border(border: BorderStroke, shape: 
+Shape = ...): Modifier
+fun Modifier.border(width: Dp, color: Color, shape: 
+Shape = ...): Modifier
+fun Modifier.border(width: Dp, brush: Brush, shape: 
+Shape): Modifier
+e: file:///C:/Users/s6323/AndroidStudioProjects/spams
+can/app/src/main/java/com/example/spamscan/ui/dashboa
+rd/DashboardScreen.kt:263:22 Unresolved reference 
+'shadow'.
+e: file:///C:/Users/s6323/AndroidStudioProjects/spams
+can/app/src/main/java/com/example/spamscan/ui/dashboa
+rd/DashboardScreen.kt:298:13 None of the following 
+candidates is applicable:
+fun Icon(bitmap: ImageBitmap, contentDescription: 
+String?, modifier: Modifier = ..., tint: Color = 
+...): Unit
+fun Icon(painter: Painter, tint: ColorProducer?, 
+contentDescription: String?, modifier: Modifier = 
+...): Unit
+fun Icon(painter: Painter, contentDescription: 
+String?, modifier: Modifier = ..., tint: Color = 
+...): Unit
+fun Icon(imageVector: ImageVector, 
+contentDescription: String?, modifier: Modifier = 
+..., tint: Color = ...): Unit
+e: file:///C:/Users/s6323/AndroidStudioProjects/spams
+can/app/src/main/java/com/example/spamscan/ui/setting
+s/SettingsScreen.kt:35:48 Unresolved reference 
+'border'.
+e: file:///C:/Users/s6323/AndroidStudioProjects/spams
+can/app/src/main/java/com/example/spamscan/ui/setting
+s/SettingsScreen.kt:45:71 Unresolved reference 
+'CircleShape'.
+e: file:///C:/Users/s6323/AndroidStudioProjects/spams
+can/app/src/main/java/com/example/spamscan/ui/setting
+s/SettingsScreen.kt:84:25 Unresolved reference 
+'RoundedCornerShape'.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.ko
+tlin.compilerRunner.GradleCompilerRunnerWithWorkers$G
+radleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack 
+trace.
+> Run with --info or --debug option to get more log 
+output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 3s
+17 actionable tasks: 1 executed, 16 up-to-date
