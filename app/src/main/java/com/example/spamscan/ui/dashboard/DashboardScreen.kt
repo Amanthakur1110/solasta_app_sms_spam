@@ -56,11 +56,19 @@ fun DashboardScreen(
     val db = remember { AppDatabase.getDatabase(context) }
     val cachedMessages by db.smsDao().getAllCachedSms().collectAsState(initial = emptyList())
 
-    // Map CachedSms to SmsItem for the UI
-    val messages = remember(cachedMessages) {
-        cachedMessages.map { 
-            SmsItem(it.id, it.sender, it.body, it.timestamp, it.spamProbability, it.isSpam)
-        }
+    var selectedFilter by remember { mutableStateOf("ALL") }
+
+    // Map CachedSms to SmsItem and Filter
+    val messages = remember(cachedMessages, selectedFilter) {
+        cachedMessages
+            .map { SmsItem(it.id, it.sender, it.body, it.timestamp, it.spamProbability, it.isSpam) }
+            .filter { 
+                when(selectedFilter) {
+                    "SPAM" -> it.isSpam
+                    "SAFE" -> !it.isSpam
+                    else -> true
+                }
+            }
     }
 
     var isScanning by remember { mutableStateOf(false) }
@@ -113,38 +121,44 @@ fun DashboardScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(24.dp, 48.dp, 24.dp, 16.dp),
+                        .padding(24.dp, 32.dp, 24.dp, 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                Column {
-                    Text(
-                        text = "Dashboard",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Gray,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = "SpamScan",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.Black
-                    )
-                }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Spam",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFE53935)
+                        )
+                        Text(
+                            text = "Scan",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.Black
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.Default.QrCodeScanner,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 
-                IconButton(
-                    onClick = onNavigateToSettings,
-                    modifier = Modifier.background(Color(0xFFF1F3F4), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Settings,
-                        contentDescription = "Settings",
-                        tint = Color.Black,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    IconButton(
+                        onClick = onNavigateToSettings,
+                        modifier = Modifier.background(Color(0xFFF1F3F4), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Settings",
+                            tint = Color.Black,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
-            }
             HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 1.dp)
         }
     }
@@ -175,19 +189,45 @@ fun DashboardScreen(
                 }
             } else {
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(start = 24.dp, top = 24.dp, bottom = 12.dp, end = 24.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
                         Text(
                             text = "Inbox Analysis",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.Black
                         )
-                        if (isScanning) {
-                            Text("Updating...", color = Color.Gray, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Tab Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFF1F3F4), RoundedCornerShape(12.dp))
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val filters = listOf("ALL", "SPAM", "SAFE")
+                            filters.forEach { filter ->
+                                val isSelected = selectedFilter == filter
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) Color.White else Color.Transparent)
+                                        .clickable { selectedFilter = filter }
+                                        .padding(if (isSelected) 0.dp else 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = filter,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.Black else Color.Gray,
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+                            }
                         }
                     }
                 }
