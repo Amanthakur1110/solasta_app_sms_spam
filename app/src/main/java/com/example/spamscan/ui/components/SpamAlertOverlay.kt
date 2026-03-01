@@ -54,7 +54,6 @@ fun SpamAlertOverlay(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
-            .padding(top = 40.dp)
     ) {
         Card(
             shape = RoundedCornerShape(16.dp),

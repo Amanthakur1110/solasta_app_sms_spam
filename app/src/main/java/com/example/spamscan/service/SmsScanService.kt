@@ -48,20 +48,11 @@ class SmsScanService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
     override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
 
-    private val globalSpamReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == SmsReceiver.ACTION_SPAM_DETECTED) {
-                val sender = intent.getStringExtra(SmsReceiver.EXTRA_SENDER) ?: ""
-                val body = intent.getStringExtra(SmsReceiver.EXTRA_BODY) ?: ""
-                val prob = intent.getFloatExtra(SmsReceiver.EXTRA_PROBABILITY, 0f)
-                showGlobalOverlay(sender, body, prob)
-            }
-        }
-    }
 
     companion object {
         private const val CHANNEL_ID = "SpamScanServiceChannel"
         private const val NOTIFICATION_ID = 101
+        const val ACTION_SHOW_OVERLAY = "com.example.spamscan.ACTION_SHOW_OVERLAY"
     }
 
     override fun onCreate() {
@@ -69,10 +60,6 @@ class SmsScanService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
         savedStateRegistryController.performRestore(null)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
-        LocalBroadcastManager.getInstance(this).registerReceiver(
-            globalSpamReceiver,
-            IntentFilter(SmsReceiver.ACTION_SPAM_DETECTED)
-        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -80,22 +67,28 @@ class SmsScanService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
         val notification = createNotification()
         startForeground(NOTIFICATION_ID, notification)
         registerSmsReceiver()
+
+        if (intent?.action == ACTION_SHOW_OVERLAY) {
+            val sender = intent.getStringExtra(SmsReceiver.EXTRA_SENDER) ?: "Unknown"
+            val body = intent.getStringExtra(SmsReceiver.EXTRA_BODY) ?: ""
+            val prob = intent.getFloatExtra(SmsReceiver.EXTRA_PROBABILITY, 0f)
+            showGlobalOverlay(sender, body, prob)
+        }
+
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
         unregisterSmsReceiver()
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(globalSpamReceiver)
         removeOverlay()
         _viewModelStore.clear()
     }
 
     private fun showGlobalOverlay(sender: String, body: String, probability: Float) {
-        removeOverlay() // Ensure previous one is gone
+        removeOverlay() 
 
         val hostView = ComposeView(this).apply {
-            // Lifecycle and SavedState boilerplate for Compose in Service
             setViewTreeLifecycleOwner(this@SmsScanService)
             setViewTreeViewModelStoreOwner(this@SmsScanService)
             setViewTreeSavedStateRegistryOwner(this@SmsScanService)
@@ -110,7 +103,6 @@ class SmsScanService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
                         isVisible = isVisible,
                         onDismiss = { 
                             isVisible = false
-                            // Delay removal to allow animation
                             Handler(Looper.getMainLooper()).postDelayed({
                                 removeOverlay()
                             }, 1000)
@@ -128,22 +120,21 @@ class SmsScanService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
             else
                 WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP
-            y = 50 // Inset from top
+            y = 0 
         }
 
         try {
             windowManager.addView(hostView, params)
             overlayView = hostView
             
-            // Auto dismiss backup
             Handler(Looper.getMainLooper()).postDelayed({
                 removeOverlay()
-            }, 12000) // Slightly longer than the 10s internal timer
+            }, 12000) 
         } catch (e: Exception) {
             e.printStackTrace()
         }

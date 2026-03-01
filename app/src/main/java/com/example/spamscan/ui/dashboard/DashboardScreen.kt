@@ -190,12 +190,42 @@ fun DashboardScreen(
             } else {
                 item {
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
-                        Text(
-                            text = "Inbox Analysis",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Inbox Analysis",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            if (isScanning) {
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val infiniteTransition = rememberInfiniteTransition(label = "scan_pulse")
+                                    val alpha by infiniteTransition.animateFloat(
+                                        initialValue = 0.3f,
+                                        targetValue = 1f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(800, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse
+                                        ),
+                                        label = "scan_alpha"
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .background(Color.Black.copy(alpha = alpha), CircleShape)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "SCANNING...",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color.Black.copy(alpha = alpha),
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(12.dp))
 
                         // Tab Row

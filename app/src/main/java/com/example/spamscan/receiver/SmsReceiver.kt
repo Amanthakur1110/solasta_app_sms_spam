@@ -58,12 +58,13 @@ class SmsReceiver : BroadcastReceiver() {
                     db.smsDao().insertSms(cachedSms)
 
                     if (result.isSpam) {
-                        val overlayIntent = Intent(ACTION_SPAM_DETECTED).apply {
+                        val overlayIntent = Intent(context, com.example.spamscan.service.SmsScanService::class.java).apply {
+                            action = "com.example.spamscan.ACTION_SHOW_OVERLAY"
                             putExtra(EXTRA_SENDER, sender)
                             putExtra(EXTRA_BODY, body)
                             putExtra(EXTRA_PROBABILITY, result.probability)
                         }
-                        LocalBroadcastManager.getInstance(context).sendBroadcast(overlayIntent)
+                        context.startForegroundService(overlayIntent)
                     }
                 }
             }
