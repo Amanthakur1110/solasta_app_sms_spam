@@ -20,39 +20,53 @@ object SpamDetector {
     private var wordIndex: Map<String, Int>? = null
     private var currentModelConfig: String = "default"
 
+    @Synchronized
     fun initialize(context: Context, useCustom: Boolean = false) {
         val configKey = if (useCustom) "custom" else "default"
         
-        if (interpreter == null || currentModelConfig != configKey) {
+        try {
+            if (interpreter == null || currentModelConfig != configKey) {
+                interpreter?.close()
+                interpreter = loadModel(context, useCustom)
+                currentModelConfig = configKey
+            }
+            
+            if (wordIndex == null) {
+                wordIndex = loadWordIndex(context)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Initialization failed: ${e.message}")
+        }
+    }
+
+    @Synchronized
+    fun forceReload(context: Context, useCustom: Boolean) {
+        try {
             interpreter?.close()
             interpreter = loadModel(context, useCustom)
-            currentModelConfig = configKey
-        }
-        
-        if (wordIndex == null) {
-            wordIndex = loadWordIndex(context)
+            currentModelConfig = if (useCustom) "custom" else "default"
+        } catch (e: Exception) {
+            Log.e(TAG, "Force reload failed: ${e.message}")
         }
     }
 
-    fun forceReload(context: Context, useCustom: Boolean) {
-        interpreter?.close()
-        interpreter = loadModel(context, useCustom)
-        currentModelConfig = if (useCustom) "custom" else "default"
-    }
-
-    private fun loadModel(context: Context, useCustom: Boolean): Interpreter {
+    private fun loadModel(context: Context, useCustom: Boolean): Interpreter? {
         val options = Interpreter.Options()
         
-        return if (useCustom) {
-            val customFile = java.io.File(context.filesDir, "custom_model.tflite")
-            if (customFile.exists()) {
-                Interpreter(customFile, options)
+        return try {
+            if (useCustom) {
+                val customFile = java.io.File(context.filesDir, "custom_model.tflite")
+                if (customFile.exists()) {
+                    Interpreter(customFile, options)
+                } else {
+                    loadDefaultModel(context, options)
+                }
             } else {
-                // Fallback to default if custom file missing
                 loadDefaultModel(context, options)
             }
-        } else {
-            loadDefaultModel(context, options)
+        } catch (e: Exception) {
+            Log.e(TAG, "Model loading failed: ${e.message}")
+            try { loadDefaultModel(context, options) } catch (e2: Exception) { null }
         }
     }
 
@@ -157,38 +171,49 @@ object SpamDetector {
         return paddedSequence
     }
 
+    @Synchronized
     fun classify(context: Context, rawMessage: String, threshold: Float = 0.5f, useCustom: Boolean = false): SpamResult {
-        initialize(context, useCustom)
-        
-        val additionalFeatures = createAdditionalFeatures(rawMessage)
-        val cleanedText = cleanText(rawMessage)
-        val paddedSequence = tokenizeAndPadSequence(cleanedText)
-        
-        val prob = runInference(paddedSequence, additionalFeatures)
-        return SpamResult(prob, prob >= threshold, rawMessage)
+        try {
+            initialize(context, useCustom)
+            
+            val additionalFeatures = createAdditionalFeatures(rawMessage)
+            val cleanedText = cleanText(rawMessage)
+            val paddedSequence = tokenizeAndPadSequence(cleanedText)
+            
+            val prob = runInference(paddedSequence, additionalFeatures)
+            return SpamResult(prob, prob >= threshold, rawMessage)
+        } catch (e: Exception) {
+            Log.e(TAG, "Classification failed: ${e.message}")
+            return SpamResult(0f, false, rawMessage)
+        }
     }
 
     private fun runInference(textInputSequence: List<Int>, additionalFeatures: List<Float>): Float {
-        val tflite = interpreter ?: return 0f
-        
-        val textInputArray = textInputSequence.map { it.toFloat() }.toFloatArray()
-        val additionalFeaturesArray = additionalFeatures.toFloatArray()
+        return try {
+            val tflite = interpreter ?: return 0f
+            
+            val textInputArray = textInputSequence.map { it.toFloat() }.toFloatArray()
+            val additionalFeaturesArray = additionalFeatures.toFloatArray()
 
-        val outputs: MutableMap<Int, Any> = mutableMapOf()
-        outputs[0] = Array(1) { FloatArray(1) }
+            val outputs: MutableMap<Int, Any> = mutableMapOf()
+            outputs[0] = Array(1) { FloatArray(1) }
 
-        val textInputBuffer = ByteBuffer.allocateDirect(textInputArray.size * 4).order(ByteOrder.nativeOrder())
-        val additionalFeaturesBuffer = ByteBuffer.allocateDirect(additionalFeaturesArray.size * 4).order(ByteOrder.nativeOrder())
+            val textInputBuffer = ByteBuffer.allocateDirect(textInputArray.size * 4).order(ByteOrder.nativeOrder())
+            val additionalFeaturesBuffer = ByteBuffer.allocateDirect(additionalFeaturesArray.size * 4).order(ByteOrder.nativeOrder())
 
-        textInputBuffer.asFloatBuffer().put(textInputArray)
-        additionalFeaturesBuffer.asFloatBuffer().put(additionalFeaturesArray)
+            textInputBuffer.asFloatBuffer().put(textInputArray)
+            additionalFeaturesBuffer.asFloatBuffer().put(additionalFeaturesArray)
 
-        tflite.runForMultipleInputsOutputs(
-            arrayOf(textInputBuffer, additionalFeaturesBuffer),
-            outputs
-        )
+            tflite.runForMultipleInputsOutputs(
+                arrayOf(textInputBuffer, additionalFeaturesBuffer),
+                outputs
+            )
 
-        val outputArray = (outputs[0] as Array<*>)[0] as FloatArray
-        return outputArray[0]
+            val outputArray = (outputs[0] as Array<*>)[0] as FloatArray
+            outputArray[0]
+        } catch (e: Exception) {
+            Log.e(TAG, "Inference failed: ${e.message}")
+            0f
+        }
     }
 }

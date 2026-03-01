@@ -1,5 +1,6 @@
 package com.example.spamscan.ui.settings
 
+import android.util.Log
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,8 +46,13 @@ fun SettingsScreen(
             coroutineScope.launch {
                 try {
                     val inputStream = context.contentResolver.openInputStream(it)
+                    if (inputStream == null) {
+                        android.widget.Toast.makeText(context, "Failed to open selected file", android.widget.Toast.LENGTH_SHORT).show()
+                        return@launch
+                    }
+                    
                     val outFile = java.io.File(context.filesDir, "custom_model.tflite")
-                    inputStream?.use { input ->
+                    inputStream.use { input ->
                         outFile.outputStream().use { output ->
                             input.copyTo(output)
                         }
@@ -58,9 +64,11 @@ fun SettingsScreen(
                     preferences.setUseCustomModel(true)
                     
                     // Force reload SpamDetector
-                    com.example.spamscan.ml.SpamDetector.forceReload(context, true)
+                    SpamDetector.forceReload(context, true)
+                    android.widget.Toast.makeText(context, "Model uploaded and activated successfully", android.widget.Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
-                    // Handle error
+                    android.widget.Toast.makeText(context, "Upload failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    Log.e("SettingsScreen", "File upload error", e)
                 }
             }
         }
@@ -215,10 +223,21 @@ fun SettingsScreen(
                         
                         Switch(
                             checked = useCustomModel,
-                            onCheckedChange = { 
-                                if (java.io.File(context.filesDir, "custom_model.tflite").exists()) {
-                                    preferences.setUseCustomModel(it)
-                                    SpamDetector.forceReload(context, it)
+                            onCheckedChange = { checked ->
+                                coroutineScope.launch {
+                                    if (checked) {
+                                        if (java.io.File(context.filesDir, "custom_model.tflite").exists()) {
+                                            preferences.setUseCustomModel(true)
+                                            SpamDetector.forceReload(context, true)
+                                            android.widget.Toast.makeText(context, "Custom model activated", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Please upload a model first", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    } else {
+                                        preferences.setUseCustomModel(false)
+                                        SpamDetector.forceReload(context, false)
+                                        android.widget.Toast.makeText(context, "Default model activated", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             },
                             colors = SwitchDefaults.colors(
