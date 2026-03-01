@@ -1,5 +1,8 @@
 package com.example.spamscan.ui.settings
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -7,18 +10,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.spamscan.data.AppPreferences
+import com.example.spamscan.ml.SpamDetector
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
@@ -27,6 +33,38 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     val currentThreshold by preferences.spamThreshold.collectAsState()
+    val useCustomModel by preferences.useCustomModel.collectAsState()
+    val customModelName by preferences.customModelName.collectAsState()
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val filePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            coroutineScope.launch {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(it)
+                    val outFile = java.io.File(context.filesDir, "custom_model.tflite")
+                    inputStream?.use { input ->
+                        outFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    
+                    // Get filename from URI if possible
+                    val fileName = it.path?.substringAfterLast('/') ?: "custom_model.tflite"
+                    preferences.setCustomModelName(fileName)
+                    preferences.setUseCustomModel(true)
+                    
+                    // Force reload SpamDetector
+                    com.example.spamscan.ml.SpamDetector.forceReload(context, true)
+                } catch (e: Exception) {
+                    // Handle error
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -134,6 +172,76 @@ fun SettingsScreen(
                         ),
                         modifier = Modifier.padding(vertical = 12.dp)
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text = "Model Management",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (useCustomModel) "Custom Model" else "Default Model",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            Text(
+                                text = if (useCustomModel) (customModelName ?: "custom_model.tflite") else "System Integrated",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                        }
+                        
+                        Switch(
+                            checked = useCustomModel,
+                            onCheckedChange = { 
+                                if (java.io.File(context.filesDir, "custom_model.tflite").exists()) {
+                                    preferences.setUseCustomModel(it)
+                                    SpamDetector.forceReload(context, it)
+                                }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color.Black,
+                                uncheckedThumbColor = Color.Gray,
+                                uncheckedTrackColor = Color(0xFFF1F3F4)
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Button(
+                        onClick = { filePicker.launch("*/*") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F3F4)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(imageVector = Icons.Filled.Settings, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Upload New Model", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 

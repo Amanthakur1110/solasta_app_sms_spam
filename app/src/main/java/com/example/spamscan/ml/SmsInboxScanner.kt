@@ -10,7 +10,7 @@ import kotlinx.coroutines.withContext
 
 class SmsInboxScanner(private val context: Context) {
 
-    suspend fun scanInbox() = withContext(Dispatchers.IO) {
+    suspend fun scanInbox(useCustomModel: Boolean? = null) = withContext(Dispatchers.IO) {
         // 1. Check Permissions First
         if (androidx.core.content.ContextCompat.checkSelfPermission(
                 context, 
@@ -34,6 +34,7 @@ class SmsInboxScanner(private val context: Context) {
 
             val preferences = com.example.spamscan.data.AppPreferences(context)
             val currentThreshold = preferences.spamThreshold.value
+            val actualUseCustom = useCustomModel ?: preferences.useCustomModel.value
             val db = com.example.spamscan.data.local.AppDatabase.getDatabase(context)
             val smsDao = db.smsDao()
 
@@ -52,7 +53,7 @@ class SmsInboxScanner(private val context: Context) {
                     val cachedSms = smsDao.getCachedSmsById(id)
 
                     if (cachedSms == null) {
-                        val result = SpamDetector.classify(context, body, currentThreshold)
+                        val result = SpamDetector.classify(context, body, currentThreshold, actualUseCustom)
                         smsDao.insertSms(
                             com.example.spamscan.data.local.CachedSms(
                                 id = id,

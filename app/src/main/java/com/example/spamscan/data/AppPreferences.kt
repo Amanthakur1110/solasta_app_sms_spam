@@ -15,6 +15,12 @@ class AppPreferences(context: Context) {
     private val _spamThreshold = MutableStateFlow(prefs.getFloat("spam_threshold", 0.5f))
     val spamThreshold: StateFlow<Float> = _spamThreshold.asStateFlow()
 
+    private val _useCustomModel = MutableStateFlow(prefs.getBoolean("use_custom_model", false))
+    val useCustomModel: StateFlow<Boolean> = _useCustomModel.asStateFlow()
+
+    private val _customModelName = MutableStateFlow(prefs.getString("custom_model_name", null))
+    val customModelName: StateFlow<String?> = _customModelName.asStateFlow()
+
     fun setServiceRunning(isRunning: Boolean) {
         prefs.edit().putBoolean("service_running", isRunning).apply()
         _isServiceRunning.value = isRunning
@@ -23,5 +29,15 @@ class AppPreferences(context: Context) {
     fun setSpamThreshold(threshold: Float) {
         prefs.edit().putFloat("spam_threshold", threshold).apply()
         _spamThreshold.value = threshold
+    }
+
+    fun setUseCustomModel(useCustom: Boolean) {
+        prefs.edit().putBoolean("use_custom_model", useCustom).apply()
+        _useCustomModel.value = useCustom
+    }
+
+    fun setCustomModelName(name: String?) {
+        prefs.edit().putString("custom_model_name", name).apply()
+        _customModelName.value = name
     }
 }

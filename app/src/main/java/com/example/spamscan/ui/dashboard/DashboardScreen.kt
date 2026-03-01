@@ -32,12 +32,13 @@ import androidx.compose.ui.unit.sp
 import com.example.spamscan.data.AppPreferences
 import com.example.spamscan.data.SmsItem
 import com.example.spamscan.ml.SmsInboxScanner
+import com.example.spamscan.ml.SpamDetector
 import com.example.spamscan.service.SmsScanService
+import com.example.spamscan.data.local.AppDatabase
 import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
-import com.example.spamscan.data.local.AppDatabase
 
 @Composable
 fun DashboardScreen(
@@ -48,6 +49,7 @@ fun DashboardScreen(
     val coroutineScope = rememberCoroutineScope()
     val isRunning by preferences.isServiceRunning.collectAsState()
     val spamThreshold by preferences.spamThreshold.collectAsState()
+    val useCustomModel by preferences.useCustomModel.collectAsState()
 
     // Observe Room database Flow for instant refresh
     val db = remember { AppDatabase.getDatabase(context) }
@@ -151,7 +153,7 @@ fun DashboardScreen(
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
             item {
-                StatusHeaderItem(isRunning = isRunning, preferences = preferences)
+                StatusHeaderItem(isRunning = isRunning, preferences = preferences, useCustomModel = useCustomModel)
             }
 
             if (isScanning && messages.isEmpty()) {
@@ -190,7 +192,7 @@ fun DashboardScreen(
                 }
                 items(messages, key = { it.id }) { msg ->
                     Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        MessageCard(msg, spamThreshold)
+                        MessageCard(msg = msg, threshold = spamThreshold, useCustomModel = useCustomModel)
                     }
                 }
             }
@@ -199,25 +201,19 @@ fun DashboardScreen(
 }
 
 @Composable
-fun StatusHeaderItem(isRunning: Boolean, preferences: AppPreferences) {
+fun StatusHeaderItem(isRunning: Boolean, preferences: AppPreferences, useCustomModel: Boolean) {
     val context = LocalContext.current
-    val transition = updateTransition(isRunning, label = "ButtonState")
-    val buttonColor by transition.animateColor(
-        transitionSpec = { tween(800) },
-        label = "ButtonColor"
-    ) { state ->
-        if (state) Color.Black else Color(0xFFE0E0E0)
-    }
+    val coroutineScope = rememberCoroutineScope()
 
-    val infiniteTransition = rememberInfiniteTransition(label = "Pulse")
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = if (isRunning) 1.08f else 1f,
+        targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FastOutSlowInEasing),
+            animation = tween(1500, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "PulseScale"
+        label = "pulseScale"
     )
 
     Column(
@@ -226,30 +222,12 @@ fun StatusHeaderItem(isRunning: Boolean, preferences: AppPreferences) {
             .padding(vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Animated Monochrome Button
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(160.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    val newRunningState = !isRunning
-                    preferences.setServiceRunning(newRunningState)
-                    val serviceIntent = Intent(context, SmsScanService::class.java)
-                    if (newRunningState) {
-                        context.startForegroundService(serviceIntent)
-                    } else {
-                        context.stopService(serviceIntent)
-                    }
-                }
-        ) {
-            // Pulse Ring
+        Box(contentAlignment = Alignment.Center) {
+            // Pulse circle
             if (isRunning) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .size(120.dp)
                         .scale(pulseScale)
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.05f))
@@ -257,17 +235,31 @@ fun StatusHeaderItem(isRunning: Boolean, preferences: AppPreferences) {
                 )
             }
 
-            // Main Button
+            // Main Toggle Button
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(110.dp)
                     .clip(CircleShape)
-                    .background(buttonColor)
+                    .background(if (isRunning) Color.Black else Color(0xFFF1F3F4))
                     .shadow(if (isRunning) 10.dp else 0.dp, CircleShape)
+                    .clickable { 
+                        val nextState = !isRunning
+                        preferences.setServiceRunning(nextState)
+                        
+                        val serviceIntent = Intent(context, SmsScanService::class.java)
+                        if (nextState) {
+                            context.startForegroundService(serviceIntent)
+                            coroutineScope.launch {
+                                SmsInboxScanner(context).scanInbox(useCustomModel = useCustomModel)
+                            }
+                        } else {
+                            context.stopService(serviceIntent)
+                        }
+                    }
             ) {
                 Icon(
-                    imageVector = Icons.Filled.VerifiedUser, // Using safer default icons
+                    imageVector = Icons.Filled.Settings,
                     contentDescription = "Toggle Service",
                     tint = if (isRunning) Color.White else Color.DarkGray,
                     modifier = Modifier.size(40.dp)
@@ -300,7 +292,7 @@ fun PermissionRequestItem(onGrantClick: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
-                imageVector = Icons.Filled.Lock, 
+                imageVector = Icons.Filled.Settings, 
                 contentDescription = null, 
                 modifier = Modifier.size(48.dp), 
                 tint = Color.LightGray
@@ -332,8 +324,11 @@ fun PermissionRequestItem(onGrantClick: () -> Unit) {
 }
 
 @Composable
-fun MessageCard(msg: SmsItem, spamThreshold: Float) {
-    val isCurrentlySpam = msg.spamProbability >= spamThreshold
+fun MessageCard(msg: SmsItem, threshold: Float, useCustomModel: Boolean) {
+    val context = LocalContext.current
+    val isCurrentlySpam = remember(msg, threshold, useCustomModel) {
+        SpamDetector.classify(context, msg.body, threshold, useCustomModel).isSpam
+    }
     
     Card(
         shape = RoundedCornerShape(12.dp),

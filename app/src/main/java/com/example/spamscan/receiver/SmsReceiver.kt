@@ -22,19 +22,17 @@ class SmsReceiver : BroadcastReceiver() {
             val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
             val preferences = AppPreferences(context)
             val currentThreshold = preferences.spamThreshold.value
+            val useCustomModel = preferences.useCustomModel.value
             
             for (message in messages) {
                 val sender = message.originatingAddress ?: "Unknown"
                 val body = message.messageBody ?: ""
 
-                // Ensure ML model is loaded
-                SpamDetector.initialize(context)
-
                 // Run inference
-                val result = SpamDetector.classify(context, body, currentThreshold)
-                Log.d("SmsReceiver", "Received SMS from \$sender - Spam Prob: \${result.probability}")
+                val result = SpamDetector.classify(context, body, currentThreshold, useCustomModel)
+                Log.d("SmsReceiver", "Received SMS from $sender - Spam Prob: ${result.probability}")
 
-                if (result.probability >= currentThreshold) {
+                if (result.isSpam) {
                     val overlayIntent = Intent(ACTION_SPAM_DETECTED).apply {
                         putExtra(EXTRA_SENDER, sender)
                         putExtra(EXTRA_BODY, body)

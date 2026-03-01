@@ -15,30 +15,54 @@ data class SpamResult(val probability: Float, val isSpam: Boolean, val message: 
 
 object SpamDetector {
     private const val TAG = "SpamDetector"
-    private const val MODEL_NAME = "model.tflite"
     private const val MAX_LEN = 165
-
     private var interpreter: Interpreter? = null
     private var wordIndex: Map<String, Int>? = null
+    private var currentModelConfig: String = "default"
 
-    fun initialize(context: Context) {
-        if (interpreter == null) {
-            interpreter = loadModel(context)
+    fun initialize(context: Context, useCustom: Boolean = false) {
+        val configKey = if (useCustom) "custom" else "default"
+        
+        if (interpreter == null || currentModelConfig != configKey) {
+            interpreter?.close()
+            interpreter = loadModel(context, useCustom)
+            currentModelConfig = configKey
         }
+        
         if (wordIndex == null) {
             wordIndex = loadWordIndex(context)
         }
     }
 
-    private fun loadModel(context: Context): Interpreter {
-        val assetFileDescriptor = context.assets.openFd(MODEL_NAME)
+    fun forceReload(context: Context, useCustom: Boolean) {
+        interpreter?.close()
+        interpreter = loadModel(context, useCustom)
+        currentModelConfig = if (useCustom) "custom" else "default"
+    }
+
+    private fun loadModel(context: Context, useCustom: Boolean): Interpreter {
+        val options = Interpreter.Options()
+        
+        return if (useCustom) {
+            val customFile = java.io.File(context.filesDir, "custom_model.tflite")
+            if (customFile.exists()) {
+                Interpreter(customFile, options)
+            } else {
+                // Fallback to default if custom file missing
+                loadDefaultModel(context, options)
+            }
+        } else {
+            loadDefaultModel(context, options)
+        }
+    }
+
+    private fun loadDefaultModel(context: Context, options: Interpreter.Options): Interpreter {
+        val assetFileDescriptor = context.assets.openFd("model.tflite")
         val fileInputStream = FileInputStream(assetFileDescriptor.fileDescriptor)
         val fileChannel = fileInputStream.channel
         val startOffset = assetFileDescriptor.startOffset
         val declaredLength = assetFileDescriptor.declaredLength
         val mappedByteBuffer = fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
-        
-        val options = Interpreter.Options()
         return Interpreter(mappedByteBuffer, options)
     }
 
@@ -133,8 +157,8 @@ object SpamDetector {
         return paddedSequence
     }
 
-    fun classify(context: Context, rawMessage: String, threshold: Float = 0.5f): SpamResult {
-        initialize(context)
+    fun classify(context: Context, rawMessage: String, threshold: Float = 0.5f, useCustom: Boolean = false): SpamResult {
+        initialize(context, useCustom)
         
         val additionalFeatures = createAdditionalFeatures(rawMessage)
         val cleanedText = cleanText(rawMessage)
