@@ -34,15 +34,21 @@ class SmsReceiver : BroadcastReceiver() {
                 val sender = message.originatingAddress ?: "Unknown"
                 val body = message.messageBody ?: ""
 
-                // Run inference
-                val result = SpamDetector.classify(context, body, currentThreshold, useCustomModel)
-                Log.d("SmsReceiver", "Received SMS from $sender - Spam Prob: ${result.probability}")
-
-                // Persist to database to trigger real-time refresh in Dashboard
+                // Handle everything in IO scope to avoid blocking main thread and allow suspend calls
                 CoroutineScope(Dispatchers.IO).launch {
+                    val isBlocked = db.blockedSenderDao().isBlocked(sender)
+                    
+                    val result = if (isBlocked) {
+                        com.example.spamscan.ml.SpamResult(probability = 1.0f, isSpam = true, message = body)
+                    } else {
+                        SpamDetector.classify(context, body, currentThreshold, useCustomModel)
+                    }
+
+                    Log.d("SmsReceiver", "Received SMS from $sender - Spam Prob: ${result.probability} (Blocked: $isBlocked)")
+
                     val timestamp = System.currentTimeMillis()
                     val cachedSms = CachedSms(
-                        id = timestamp + body.hashCode(), // Simple unique ID
+                        id = timestamp + body.hashCode(),
                         sender = sender,
                         body = body,
                         timestamp = timestamp,
@@ -50,15 +56,15 @@ class SmsReceiver : BroadcastReceiver() {
                         isSpam = result.isSpam
                     )
                     db.smsDao().insertSms(cachedSms)
-                }
 
-                if (result.isSpam) {
-                    val overlayIntent = Intent(ACTION_SPAM_DETECTED).apply {
-                        putExtra(EXTRA_SENDER, sender)
-                        putExtra(EXTRA_BODY, body)
-                        putExtra(EXTRA_PROBABILITY, result.probability)
+                    if (result.isSpam) {
+                        val overlayIntent = Intent(ACTION_SPAM_DETECTED).apply {
+                            putExtra(EXTRA_SENDER, sender)
+                            putExtra(EXTRA_BODY, body)
+                            putExtra(EXTRA_PROBABILITY, result.probability)
+                        }
+                        LocalBroadcastManager.getInstance(context).sendBroadcast(overlayIntent)
                     }
-                    LocalBroadcastManager.getInstance(context).sendBroadcast(overlayIntent)
                 }
             }
         }

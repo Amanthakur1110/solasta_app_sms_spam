@@ -43,7 +43,8 @@ import android.Manifest
 @Composable
 fun DashboardScreen(
     preferences: AppPreferences,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToDetail: (Long) -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -192,7 +193,12 @@ fun DashboardScreen(
                 }
                 items(messages, key = { it.id }) { msg ->
                     Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        MessageCard(msg = msg, threshold = spamThreshold, useCustomModel = useCustomModel)
+                        MessageCard(
+                            msg = msg, 
+                            threshold = spamThreshold, 
+                            useCustomModel = useCustomModel,
+                            onClick = { onNavigateToDetail(msg.id) }
+                        )
                     }
                 }
             }
@@ -324,7 +330,7 @@ fun PermissionRequestItem(onGrantClick: () -> Unit) {
 }
 
 @Composable
-fun MessageCard(msg: SmsItem, threshold: Float, useCustomModel: Boolean) {
+fun MessageCard(msg: SmsItem, threshold: Float, useCustomModel: Boolean, onClick: () -> Unit) {
     val context = LocalContext.current
     val isCurrentlySpam = remember(msg, threshold, useCustomModel) {
         SpamDetector.classify(context, msg.body, threshold, useCustomModel).isSpam
@@ -334,7 +340,11 @@ fun MessageCard(msg: SmsItem, threshold: Float, useCustomModel: Boolean) {
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
